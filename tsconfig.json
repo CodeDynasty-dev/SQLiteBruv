@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    // enable latest features
+    "lib": ["es2022", "esnext", "dom", "dom.iterable"],
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleDetection": "force",
+    "allowJs": true,
+    "removeComments": true,
+    // Bundler mode
+    "declaration": true,
+    // Best practices
+    "strict": true,
+    // Some stricter flags
+    "useUnknownInCatchVariables": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "outDir": "./dist"
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"]
+}

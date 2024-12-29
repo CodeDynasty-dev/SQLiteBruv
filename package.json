@@ -1,0 +1,28 @@
+{
+  "name": "sqlitebruv",
+  "description": "A Simple and Efficient Query Builder for D1/Turso and Bun's SQLite",
+  "version": "1.1.0",
+  "main": "dist/index.js",
+  "type": "module",
+  "files": [
+    "dist/index.d.ts",
+    "dist/index.js"
+  ],
+  "scripts": {
+    "build": " rm -rf dist && tsc"
+  },
+  "keywords": [
+    "SQL",
+    "SQLite",
+    "sqlitebruv",
+    "D1",
+    "bun",
+    "query"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bun": "^1.1.14",
+    "@types/node": "^22.10.2"
+  }
+}
