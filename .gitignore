@@ -5,3 +5,4 @@ tests.ts
 Database.db
 .env
 node_modules
+TODO.md

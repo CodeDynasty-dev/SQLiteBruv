@@ -1,6 +1,6 @@
 # SQLiteBruv Query Builder
 
-A type-safe, secure SQLite query builder with D1/Turso support with built-in migrations and security features.
+A Tiny Type-Safe, Secure SQLite Query Builder with D1/Turso support with built-in migrations and security features.
 
 [![npm version](https://badge.fury.io/js/sqlitebruv.svg)](https://www.npmjs.com/package/sqlitebruv)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![npm](https://img.shields.io/npm/dm/sqlitebruv.svg)](https://www.npmjs.com/package/sqlitebruv) [![TypeScript](https://img.shields.io/badge/Typescript-%3E%3D4.0-blue.svg)](https://www.typescriptlang.org/)
@@ -271,12 +271,6 @@ const posts = await db
   .limit(10)
   .get();
 
-// Transactions
-await db.transaction(async (trx) => {
-  await trx.from("users").insert({ name: "John" });
-  await trx.from("profiles").insert({ userId: 1 });
-});
-
 // Raw queries with safety
 await db.raw("SELECT * FROM users WHERE id = ?", [userId]);
 
@@ -447,7 +441,3 @@ Contributions are always welcome! creates issues and pull requests.
 Documentation
 GitHub Issues
 Discord Community
-
-<center>
-<img src="https://github.com/FridayCandour/SQLiteBruv/blob/main/qrcode.png?raw=true" style="width: 320px; margin: auto;" />
-</center>

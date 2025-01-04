@@ -63,7 +63,7 @@ export class SqliteBruv<
   T extends Record<string, Params> = Record<string, Params>
 > {
   static migrationFolder = "./Bruv-migrations";
-  db: any;
+  private db: any;
   dbMem: any;
   private _columns: string[] = ["*"];
   private _conditions: string[] = [];
@@ -264,7 +264,7 @@ export class SqliteBruv<
       this._hotCache[this._cacheName];
     }
     const { query, params } = this.build();
-    if (this._query) {
+    if (this._query === true) {
       return { query, params } as unknown as Promise<T[]>;
     }
     return this.run(query, params, { single: false });
@@ -274,22 +274,21 @@ export class SqliteBruv<
       this._hotCache[this._cacheName];
     }
     const { query, params } = this.build();
-    if (this._query) {
+    if (this._query === true) {
       return { query, params } as unknown as Promise<T>;
     }
     return this.run(query, params, { single: true });
   }
   insert(data: T): Promise<T> {
     //  @ts-ignore
-    data.id = Id();
-    const columns = Object.keys(data).join(", ");
-    const placeholders = Object.keys(data)
-      .map(() => "?")
-      .join(", ");
+    data.id = Id(); // sqlitebruv provide you with string id by default
+    const attributes = Object.keys(data);
+    const columns = attributes.join(", ");
+    const placeholders = attributes.map(() => "?").join(", ");
     const query = `INSERT INTO ${this._tableName} (${columns}) VALUES (${placeholders})`;
     const params = Object.values(data) as Params[];
     this.clear();
-    if (this._query) {
+    if (this._query === true) {
       return { query, params } as unknown as Promise<T>;
     }
     return this.run(query, params);
@@ -303,7 +302,7 @@ export class SqliteBruv<
     } SET ${columns} ${this._conditions.join(" AND ")}`;
     const params = [...(Object.values(data) as Params[]), ...this._params];
     this.clear();
-    if (this._query) {
+    if (this._query === true) {
       return { query, params } as unknown as Promise<T>;
     }
     return this.run(query, params);
@@ -314,7 +313,7 @@ export class SqliteBruv<
     )}`;
     const params = [...this._params];
     this.clear();
-    if (this._query) {
+    if (this._query === true) {
       return { query, params } as unknown as Promise<T>;
     }
     return this.run(query, params);
@@ -327,7 +326,7 @@ export class SqliteBruv<
     } ${this._conditions.join(" AND ")}`;
     const params = [...this._params];
     this.clear();
-    if (this._query) {
+    if (this._query === true) {
       return { query, params } as unknown as Promise<{
         count: number;
       }>;
@@ -600,7 +599,7 @@ export class Schema<Model extends Record<string, any> = {}> {
       )
       .join(" ")})`;
     try {
-      this.db?.db.run(this.string);
+      this.db?.raw(this.string);
       this.db?.dbMem.run(this.string);
     } catch (error) {
       console.log({ err: String(error), schema: this.string });
