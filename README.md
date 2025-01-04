@@ -405,24 +405,31 @@ db.from("users")
 db.where("1=1; DROP TABLE users;"); // Dangerous pattern
 db.where("col = (SELECT ...)"); // Complex subqueries blocked
 db.where("name = ?", "a".repeat(1001)); // String too long
-db.where("email = " + userInput);
 ```
 
-## 🎮 Platform-Specific Features
+## 🎮 Features
 
-Cloudflare D1
+**Cloudflare D1**
 
-- Automatic edge deployment
 - D1 API integration
-- Built-in caching
-  Turso
+
+**Turso**
+
 - HTTP API support
-- Connection pooling
-  📊 Performance
+
+**📊 Performance**
+
 - Prepared statements
 - Connection pooling
-- Query caching
-  🤝 Contributing
+- Built-in Query caching
+
+**🚔 Security**
+
+- Block dangerous patterns
+- Block Complex subqueries
+- Block very long string parameters
+
+**🤝 Contributing**
 
 1. Fork the repository
 2. Create feature branch (git checkout -b feature/amazing)
