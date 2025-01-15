@@ -319,6 +319,7 @@ export class SqliteBruv<
     return this.run(query, params);
   }
   count(): Promise<{
+    [x: string]: any;
     count: number;
   }> {
     const query = `SELECT COUNT(*) as count  FROM ${
@@ -565,14 +566,14 @@ export class SqliteBruv<
 export class Schema<Model extends Record<string, any> = {}> {
   private string: string = "";
   name: string;
-  db?: SqliteBruv<Model>;
+  db?: SqliteBruv;
   columns: { [x in keyof Omit<Model, "_id">]: SchemaColumnOptions };
   constructor(def: BruvSchema<Model>) {
     this.name = def.name;
     this.columns = def.columns;
   }
   get query() {
-    return this.db?.from(this.name)!;
+    return this.db?.from(this.name) as SqliteBruv<Model>;
   }
   queryRaw(raw: string) {
     return this.db?.from(this.name).raw(raw, [])!;

@@ -91,3 +91,6 @@ await qb.executeJsonQuery({
   },
   from: "works",
 });
+
+const gh = await user.query.select("*").getOne();
+gh.name;
