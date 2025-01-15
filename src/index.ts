@@ -565,7 +565,7 @@ export class SqliteBruv<
 export class Schema<Model extends Record<string, any> = {}> {
   private string: string = "";
   name: string;
-  db?: SqliteBruv;
+  db?: SqliteBruv<Model>;
   columns: { [x in keyof Omit<Model, "_id">]: SchemaColumnOptions };
   constructor(def: BruvSchema<Model>) {
     this.name = def.name;
