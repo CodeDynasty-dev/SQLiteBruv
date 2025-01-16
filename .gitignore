@@ -6,4 +6,4 @@ Database.db
 .env
 node_modules
 TODO.md
-Database.sqlite
+Database.sqlite 

@@ -693,6 +693,7 @@ async function generateMigration(
 
     const currentColumns = parseSchema(currentSql);
     const targetColumns = parseSchema(targetTables[tableName]);
+    console.log({ currentColumns, targetColumns });
 
     // Compare columns
     for (const [colName, col] of Object.entries(currentColumns)) {
@@ -701,7 +702,12 @@ async function generateMigration(
         down += `-- ALTER TABLE ${tableName} ADD COLUMN ${colName} ${col.type}  ${col.constraints};\n`;
       } else if (targetColumns[colName].type !== col.type) {
         up += `ALTER TABLE ${tableName} ALTER COLUMN ${colName} TYPE ${targetColumns[colName].type}  ${targetColumns[colName].constraints};\n`;
-        down += `- ALTER TABLE ${tableName} ALTER COLUMN ${colName} TYPE ${col.type}  ${col.constraints};\n`;
+        down += `-- ALTER TABLE ${tableName} ALTER COLUMN ${colName} TYPE ${col.type}  ${col.constraints};\n`;
+      } else if (targetColumns[colName]?.constraints !== col?.constraints) {
+        up += `ALTER TABLE ${tableName} ALTER COLUMN ${colName} ${targetColumns[colName]?.constraints};\n`;
+        down += `-- ALTER TABLE ${tableName} ALTER COLUMN ${colName} ${
+          col.constraints || ""
+        };\n`;
       }
     }
 
