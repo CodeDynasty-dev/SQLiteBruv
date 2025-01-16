@@ -1,10 +1,10 @@
 import { Schema, SqliteBruv } from "./src/index";
-import { readFileSync } from "node:fs";
 // Example usage:
 
 const user = new Schema<{
   name: string;
   username: string;
+  location: string;
   age: number;
   createdAt: Date;
 }>({
@@ -13,6 +13,13 @@ const user = new Schema<{
     name: { type: "TEXT", required: true },
     username: { type: "TEXT", required: true, unique: true },
     age: { type: "INTEGER", required: true },
+    location: {
+      type: "TEXT",
+      required: true,
+      default() {
+        return "earth";
+      },
+    },
     createdAt: {
       type: "DATETIME",
       default() {
@@ -43,7 +50,7 @@ const works = new Schema<{
   },
 });
 
-const qb = new SqliteBruv({
+export const db = new SqliteBruv({
   schema: [user, works],
   // turso: {
   //   url: process.env.TURSO_URL!,
@@ -58,10 +65,10 @@ const qb = new SqliteBruv({
 });
 // console.log(user.toString());
 
-// await qb.raw(user.toString());
-// await qb.raw(works.toString());
+// await db.raw(user.toString());
+// await db.raw(works.toString());
 const time = Date.now();
-const usero = await qb.executeJsonQuery({
+const usero = await db.executeJsonQuery({
   action: "insert",
   where: [{ condition: "username = ? ", params: ["JohnDoe"] }],
   data: {
@@ -75,14 +82,14 @@ console.log({ usero });
 
 const a = (await user.query.where("username = ? ", "JohnDoe@" + time).count())
   .lastInsertRowid;
-const result = await qb.executeJsonQuery({
+const result = await db.executeJsonQuery({
   action: "getOne",
   where: [{ condition: "username =? ", params: ["JohnDoe@" + time] }],
   from: "users",
 });
 
 console.log({ result, a });
-await qb.executeJsonQuery({
+await db.executeJsonQuery({
   action: "insert",
   where: [{ condition: "username = ? ", params: ["JohnDoe"] }],
   data: {

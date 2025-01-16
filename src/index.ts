@@ -687,7 +687,7 @@ async function generateMigration(
   for (const [tableName, currentSql] of Object.entries(currentTables)) {
     if (!targetTables[tableName]) {
       up += `DROP TABLE ${tableName};\n`;
-      down += `CREATE TABLE ${tableName} (${currentSql});\n`;
+      down += `-- CREATE TABLE ${tableName} (${currentSql});\n`;
       continue;
     }
 
@@ -698,17 +698,17 @@ async function generateMigration(
     for (const [colName, col] of Object.entries(currentColumns)) {
       if (!targetColumns[colName]?.type) {
         up += `ALTER TABLE ${tableName} DROP COLUMN ${colName};\n`;
-        down += `ALTER TABLE ${tableName} ADD COLUMN ${colName} ${col.type}  ${col.constraints};\n`;
+        down += `-- ALTER TABLE ${tableName} ADD COLUMN ${colName} ${col.type}  ${col.constraints};\n`;
       } else if (targetColumns[colName].type !== col.type) {
         up += `ALTER TABLE ${tableName} ALTER COLUMN ${colName} TYPE ${targetColumns[colName].type}  ${targetColumns[colName].constraints};\n`;
-        down += `ALTER TABLE ${tableName} ALTER COLUMN ${colName} TYPE ${col.type}  ${col.constraints};\n`;
+        down += `- ALTER TABLE ${tableName} ALTER COLUMN ${colName} TYPE ${col.type}  ${col.constraints};\n`;
       }
     }
 
     for (const [colName, col] of Object.entries(targetColumns)) {
       if (!currentColumns[colName]?.type) {
         up += `ALTER TABLE ${tableName} ADD COLUMN ${colName} ${col.type} ${col.constraints};\n`;
-        down += `ALTER TABLE ${tableName} DROP COLUMN ${colName};\n`;
+        down += `-- ALTER TABLE ${tableName} DROP COLUMN ${colName};\n`;
       }
     }
   }
@@ -716,7 +716,7 @@ async function generateMigration(
   for (const [tableName, targetSql] of Object.entries(targetTables)) {
     if (!currentTables[tableName]) {
       up += `CREATE TABLE ${tableName} (${targetSql});\n`;
-      down += `DROP TABLE ${tableName};\n`;
+      down += `-- DROP TABLE ${tableName};\n`;
     }
   }
 
@@ -738,13 +738,13 @@ async function createMigrationFileIfNeeded(
     await writeFile(filepath, fileContent);
     await writeFile(
       filepath2,
-      `
-      import { db } from "../server/database";
+      `import { db } from "path/to/db";
 import { readFileSync } from "node:fs";
 
-const filePath = "${filename}";
+const filePath = "${filepath}";
 const migrationQuery = readFileSync(filePath, "utf8");
 db.raw(migrationQuery);
+// bun Bruv-migrations/migrate.ts 
       `
     );
     console.log(`Created migration file: ${filename}`);
