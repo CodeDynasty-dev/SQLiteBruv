@@ -730,11 +730,23 @@ async function createMigrationFileIfNeeded(
   const timestamp = new Date().toString().split(" ").slice(0, 5).join("_");
   const filename = `${timestamp}_auto_migration.sql`;
   const filepath = join(SqliteBruv.migrationFolder, filename);
+  const filepath2 = join(SqliteBruv.migrationFolder, "migrate.ts");
   const fileContent = `-- Up\n\n${migration.up}\n\n-- Down\n\n${migration.down}`;
   try {
     await mkdir(SqliteBruv.migrationFolder, { recursive: true });
     if (isDuplicateMigration(fileContent)) return;
     await writeFile(filepath, fileContent);
+    await writeFile(
+      filepath2,
+      `
+      import { db } from "../server/database";
+import { readFileSync } from "node:fs";
+
+const filePath = "${filename}";
+const migrationQuery = readFileSync(filePath, "utf8");
+db.raw(migrationQuery);
+      `
+    );
     console.log(`Created migration file: ${filename}`);
   } catch (error) {
     console.error("Error during file system operations: ", error);
