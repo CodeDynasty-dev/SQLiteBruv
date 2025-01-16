@@ -693,7 +693,6 @@ async function generateMigration(
 
     const currentColumns = parseSchema(currentSql);
     const targetColumns = parseSchema(targetTables[tableName]);
-    console.log({ currentColumns, targetColumns });
 
     // Compare columns
     for (const [colName, col] of Object.entries(currentColumns)) {
