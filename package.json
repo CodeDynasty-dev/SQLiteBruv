@@ -1,7 +1,7 @@
 {
   "name": "sqlitebruv",
   "description": "A Simple and Efficient Query Builder for D1/Turso and Bun's SQLite",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "main": "dist/index.js",
   "type": "module",
   "files": [
