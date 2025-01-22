@@ -36,7 +36,7 @@ export const works = new Schema<{
   name: "works",
   columns: {
     name: {
-      // unique: true,
+      unique: true,
       type: "TEXT",
       required: true,
     },

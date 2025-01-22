@@ -119,6 +119,9 @@ export class SqliteBruv<
     logging?: boolean;
     name?: string;
   }) {
+    schema.forEach((s) => {
+      s.db = this;
+    });
     this.loading = new Promise(async (r) => {
       const bun = avoidError(() => (Bun ? true : false));
       let Database;
@@ -150,7 +153,6 @@ export class SqliteBruv<
         throw new Error("Not database schema passed!");
       } else {
         schema.forEach((s) => {
-          s.db = this;
           s._induce();
         });
       }
@@ -517,16 +519,15 @@ export class SqliteBruv<
     }
     if (single === true) {
       if (this._cacheName) {
-        return this.cacheResponse(this.db.query(query).get(params));
+        return this.cacheResponse(this.db.query(query).get(...params));
       }
-      console.log({ query, params });
-      return this.db.query(query).get(params);
+      return this.db.query(query).get(...params);
     }
     if (single === false) {
       if (this._cacheName) {
-        return this.cacheResponse(this.db.query(query).all(params));
+        return this.cacheResponse(this.db.query(query).all(...params));
       }
-      return this.db.query(query).all(params);
+      return this.db.query(query).all(...params);
     }
     return this.db.exec(query);
   }
@@ -628,7 +629,8 @@ export class Schema<Model extends Record<string, any> = {}> {
       console.log({ err: String(error), schema: this.string });
     }
   }
-  toString() {
+  async getSql() {
+    await this.db?.loading;
     return this.string;
   }
 }
@@ -654,11 +656,6 @@ async function getSchema(db: any): Promise<rawSchema[] | void> {
     db.close(); // Close connection
   }
 }
-
-interface ColumnDetails {
-  [x: string]: { type: string; constraints: string };
-}
-[];
 
 async function generateMigration(
   currentSchema: rawSchema[],
