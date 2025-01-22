@@ -2,7 +2,6 @@ import { readdirSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
-import { Database } from "bun:sqlite";
 
 // TYPES:
 
@@ -102,6 +101,7 @@ export class SqliteBruv<
     /ALTER/i,
     /EXEC/i,
   ];
+  loading?: Promise<unknown>;
   constructor({
     D1,
     turso,
@@ -119,46 +119,67 @@ export class SqliteBruv<
     logging?: boolean;
     name?: string;
   }) {
-    // ?setup db
-    this.db = new Database((name || "Database") + ".sqlite", {
-      create: true,
-      strict: true,
+    this.loading = new Promise(async (r) => {
+      const bun = avoidError(() => (Bun ? true : false));
+      let Database;
+      if (bun) {
+        Database = (await import("bun:sqlite")).Database;
+      } else {
+        Database = (await import("node:sqlite")).DatabaseSync;
+      }
+      // ?setup db
+      this.db = new Database((name || "Database") + ".sqlite", {
+        create: true,
+        strict: true,
+      });
+      if (!bun) {
+        this.db.query = this.db.prepare;
+      }
+      this.dbMem = new Database(":memory:");
+      if (D1) {
+        const { accountId, databaseId, apiKey } = D1;
+        this._D1_url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`;
+        this._D1_api_key = apiKey;
+      }
+      // ?
+      if (logging === true) {
+        this._logging = true;
+      }
+      // ? get and set db for each schema
+      if (!schema?.length) {
+        throw new Error("Not database schema passed!");
+      } else {
+        schema.forEach((s) => {
+          s.db = this;
+          s._induce();
+        });
+      }
+      //? Auto create migration files
+      const isMigrating = process.argv
+        .slice(1)
+        .some((v) => v.includes("Bruv-migrations/migrate.ts"));
+      if (!isMigrating) {
+        Promise.all([getSchema(this.db), getSchema(this.dbMem)])
+          .then(async ([currentSchema, targetSchema]) => {
+            const migration = await generateMigration(
+              currentSchema || [],
+              targetSchema || []
+            );
+            await createMigrationFileIfNeeded(migration);
+            this.dbMem.close();
+          })
+          .catch((e) => {
+            console.log(e);
+          });
+      } else {
+        console.log("running migrations..");
+      }
+      if (turso) {
+        this._turso = turso;
+      }
+      this.loading = undefined;
+      r(undefined);
     });
-    this.dbMem = new Database();
-    if (D1) {
-      const { accountId, databaseId, apiKey } = D1;
-      this._D1_url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`;
-      this._D1_api_key = apiKey;
-    }
-    // ?
-    if (logging === true) {
-      this._logging = true;
-    }
-    // ? get and set db for each schema
-    if (!schema?.length) {
-      throw new Error("Not database schema passed!");
-    } else {
-      schema.forEach((s) => {
-        s.db = this;
-        s._induce();
-      });
-    }
-    //? Auto create migration files
-    Promise.all([getSchema(this.db), getSchema(this.dbMem)])
-      .then(async ([currentSchema, targetSchema]) => {
-        const migration = await generateMigration(
-          currentSchema || [],
-          targetSchema || []
-        );
-        await createMigrationFileIfNeeded(migration);
-        this.dbMem.close();
-      })
-      .catch((e) => {
-        console.log(e);
-      });
-    if (turso) {
-      this._turso = turso;
-    }
   }
   from<Model extends Record<string, any> = Record<string, any>>(
     tableName: string
@@ -285,13 +306,14 @@ export class SqliteBruv<
     const attributes = Object.keys(data);
     const columns = attributes.join(", ");
     const placeholders = attributes.map(() => "?").join(", ");
+
     const query = `INSERT INTO ${this._tableName} (${columns}) VALUES (${placeholders})`;
     const params = Object.values(data) as Params[];
     this.clear();
     if (this._query === true) {
       return { query, params } as unknown as Promise<T>;
     }
-    return this.run(query, params);
+    return this.run(query, params, { single: true });
   }
   update(data: Partial<T>): Promise<T> {
     const columns = Object.keys(data)
@@ -461,10 +483,9 @@ export class SqliteBruv<
   private async run(
     query: string,
     params: (string | number | null | boolean)[],
-    { single }: { single?: boolean } = {
-      single: undefined,
-    }
+    { single }: { single?: boolean } = {}
   ) {
+    if (this.loading) await this.loading;
     if (this._logging) {
       console.log({ query, params });
     }
@@ -494,10 +515,11 @@ export class SqliteBruv<
       }
       throw new Error(JSON.stringify(data.errors));
     }
-    if (single) {
+    if (single === true) {
       if (this._cacheName) {
         return this.cacheResponse(this.db.query(query).get(params));
       }
+      console.log({ query, params });
       return this.db.query(query).get(params);
     }
     if (single === false) {
@@ -506,7 +528,7 @@ export class SqliteBruv<
       }
       return this.db.query(query).all(params);
     }
-    return this.db.run(query, params);
+    return this.db.exec(query);
   }
   private async executeTursoQuery(
     query: string,
@@ -554,7 +576,7 @@ export class SqliteBruv<
     return transformedRows;
   }
   raw(raw: string, params: (string | number | boolean)[] = []) {
-    return this.run(raw, params, { single: false });
+    return this.run(raw, params);
   }
   async cacheResponse(response: any) {
     await response;
@@ -601,7 +623,7 @@ export class Schema<Model extends Record<string, any> = {}> {
       .join(" ")})`;
     try {
       this.db?.raw(this.string);
-      this.db?.dbMem.run(this.string);
+      this.db?.dbMem.exec(this.string);
     } catch (error) {
       console.log({ err: String(error), schema: this.string });
     }
@@ -641,114 +663,148 @@ interface ColumnDetails {
 async function generateMigration(
   currentSchema: rawSchema[],
   targetSchema: rawSchema[]
-) {
+): Promise<{ up: string; down: string }> {
   if (!targetSchema?.length) return { up: "", down: "" };
-  let up = "";
-  let down = "";
 
   const currentTables: Record<string, string> = Object.fromEntries(
-    currentSchema.map(({ name, schema }: any) => [name, schema.sql])
+    currentSchema.map(({ name, schema }) => [name, schema.sql])
   );
 
   const targetTables: Record<string, string> = Object.fromEntries(
-    targetSchema.map(({ name, schema }: any) => [name, schema.sql])
+    targetSchema.map(({ name, schema }) => [name, schema.sql])
   );
 
-  // Utility to parse table structures (naive example; improve as needed)
-  function parseSchema(sql: string): ColumnDetails {
-    // Improved regex to match column definitions including REFERENCES
+  let upStatements: string[] = ["-- Up migration", "BEGIN IMMEDIATE;"];
+  let downStatements: string[] = ["-- Down migration", "-- BEGIN IMMEDIATE;"];
+
+  // Helper function to parse column definitions
+  function parseSchema(
+    sql: string
+  ): Record<string, { type: string; constraints: string }> {
     const columnRegex =
-      /(?<column_name>\w+)\s+(?<data_type>\w+)(?:\s+(?<constraints>(?:PRIMARY KEY|UNIQUE|NOT NULL|DEFAULT\s+[^,]+|REFERENCES\s+\w+\s*\(\w+\)|CHECK\s*\(.+?\)|COLLATE\s+\w+|\s+)+))?(?:,|$)/gi;
-    // Extract the content within the parentheses
+      /(?<column_name>\w+)\s+(?<data_type>\w+)(?:\s+(?<constraints>.*?))?(?:,|\))/gi;
+
     const columnSectionMatch = sql.match(/\(([\s\S]+)\)/);
-    if (!columnSectionMatch) {
-      return {};
-    }
+    if (!columnSectionMatch) return {};
+
     const columnSection = columnSectionMatch[1];
-    const matches: any = columnSection.matchAll(columnRegex);
-    const columns: ColumnDetails = {};
+    const matches = columnSection.matchAll(columnRegex);
+
+    const columns: Record<string, { type: string; constraints: string }> = {};
     for (const match of matches) {
-      const columnName = match.groups?.column_name || "";
-      const dataType = match.groups?.data_type || "";
-      const rawConstraints = match.groups?.constraints || "";
-      const constraints = rawConstraints
-        .split(
-          /(?=PRIMARY KEY|UNIQUE|NOT NULL|DEFAULT|CHECK|COLLATE|REFERENCES)/
-        )
-        .map((constraint: string) => constraint.trim())
-        .filter((constraint: string[]) => constraint.length > 0)
-        .join(" ");
+      const columnName = match.groups?.["column_name"] || "";
+      const dataType = match.groups?.["data_type"] || "";
+      const constraints = (match.groups?.["constraints"] || "").trim();
       columns[columnName] = { type: dataType, constraints };
     }
     return columns;
   }
 
-  // Compare schemas and generate migration steps
+  // Generate migration steps
+  let shouldMigrate = false;
+
   for (const [tableName, currentSql] of Object.entries(currentTables)) {
-    if (!targetTables[tableName]) {
-      up += `DROP TABLE ${tableName};\n`;
-      down += `-- CREATE TABLE ${tableName} (${currentSql});\n`;
+    const targetSql = targetTables[tableName];
+    if (!targetSql) {
+      // Table dropped
+      shouldMigrate = true;
+      upStatements.push(`DROP TABLE ${tableName};`);
+      downStatements.push("-- " + currentSql + ";");
       continue;
     }
 
     const currentColumns = parseSchema(currentSql);
-    const targetColumns = parseSchema(targetTables[tableName]);
+    const targetColumns = parseSchema(targetSql);
 
-    // Compare columns
-    for (const [colName, col] of Object.entries(currentColumns)) {
-      if (!targetColumns[colName]?.type) {
-        up += `ALTER TABLE ${tableName} DROP COLUMN ${colName};\n`;
-        down += `-- ALTER TABLE ${tableName} ADD COLUMN ${colName} ${col.type}  ${col.constraints};\n`;
-      } else if (targetColumns[colName].type !== col.type) {
-        up += `ALTER TABLE ${tableName} ALTER COLUMN ${colName} TYPE ${targetColumns[colName].type}  ${targetColumns[colName].constraints};\n`;
-        down += `-- ALTER TABLE ${tableName} ALTER COLUMN ${colName} TYPE ${col.type}  ${col.constraints};\n`;
-      } else if (targetColumns[colName]?.constraints !== col?.constraints) {
-        up += `ALTER TABLE ${tableName} ALTER COLUMN ${colName} ${targetColumns[colName]?.constraints};\n`;
-        down += `-- ALTER TABLE ${tableName} ALTER COLUMN ${colName} ${
-          col.constraints || ""
-        };\n`;
-      }
-    }
+    if (JSON.stringify(currentColumns) !== JSON.stringify(targetColumns)) {
+      // Recreate table to reflect column changes
+      shouldMigrate = true;
 
-    for (const [colName, col] of Object.entries(targetColumns)) {
-      if (!currentColumns[colName]?.type) {
-        up += `ALTER TABLE ${tableName} ADD COLUMN ${colName} ${col.type} ${col.constraints};\n`;
-        down += `-- ALTER TABLE ${tableName} DROP COLUMN ${colName};\n`;
-      }
+      // 1. Create a new table with the target schema
+      upStatements.push(targetSql.replace(tableName, `${tableName}_new`) + ";");
+
+      // 2. Copy data to the new table
+      const commonColumns = Object.keys(currentColumns)
+        .filter((col) => targetColumns[col])
+        .join(", ");
+      upStatements.push(
+        `INSERT INTO ${tableName}_new (${commonColumns}) SELECT ${commonColumns} FROM ${tableName};`
+      );
+
+      // 3. Drop the old table
+      upStatements.push(`DROP TABLE ${tableName};`);
+
+      // 4. Rename the new table to the old table's name
+      upStatements.push(`ALTER TABLE ${tableName}_new RENAME TO ${tableName};`);
+
+      // Down migration (reverse steps)
+      // 1. Recreate the old table with the original schema
+      downStatements.push(
+        "-- " +
+          currentSql
+            .replace(tableName, `${tableName}_old`)
+            .replaceAll("\n", "\n--") +
+          ";"
+      );
+
+      // 2. Copy data back to the old table
+      downStatements.push(
+        `-- INSERT INTO ${tableName}_old (${commonColumns}) SELECT ${commonColumns} FROM ${tableName};`
+      );
+
+      // 3. Drop the current table
+      downStatements.push(`-- DROP TABLE ${tableName};`);
+
+      // 4. Rename the old table back to the original name
+      downStatements.push(
+        `-- ALTER TABLE ${tableName}_old RENAME TO ${tableName};`
+      );
     }
   }
 
+  // Handle new tables
   for (const [tableName, targetSql] of Object.entries(targetTables)) {
     if (!currentTables[tableName]) {
-      up += `CREATE TABLE ${tableName} (${targetSql});\n`;
-      down += `-- DROP TABLE ${tableName};\n`;
+      shouldMigrate = true;
+      upStatements.push(targetSql + ";");
+      downStatements.push(`-- DROP TABLE ${tableName};`);
     }
   }
 
-  return { up, down };
+  upStatements.push("COMMIT;");
+  downStatements.push("-- COMMIT;");
+
+  return shouldMigrate
+    ? { up: upStatements.join("\n"), down: downStatements.join("\n") }
+    : { up: "", down: "" };
 }
 
 async function createMigrationFileIfNeeded(
   migration: { up: string; down: string } | null
 ) {
-  if (!migration?.up) return;
+  if (!migration?.up || !migration?.down) return;
   const timestamp = new Date().toString().split(" ").slice(0, 5).join("_");
   const filename = `${timestamp}_auto_migration.sql`;
   const filepath = join(SqliteBruv.migrationFolder, filename);
   const filepath2 = join(SqliteBruv.migrationFolder, "migrate.ts");
-  const fileContent = `-- Up\n\n${migration.up}\n\n-- Down\n\n${migration.down}`;
+  const fileContent = `${migration.up}\n\n${migration.down}`;
   try {
-    await mkdir(SqliteBruv.migrationFolder, { recursive: true });
+    await mkdir(SqliteBruv.migrationFolder, { recursive: true }).catch(
+      (e) => {}
+    );
     if (isDuplicateMigration(fileContent)) return;
-    await writeFile(filepath, fileContent);
+    await writeFile(filepath, fileContent, {});
     await writeFile(
       filepath2,
-      `import { db } from "path/to/db";
+      `// Don't rename this file or the directory
+// import your db class correctly below and run the file to apply.
+import { db } from "path/to/db";
 import { readFileSync } from "node:fs";
 
 const filePath = "${filepath}";
 const migrationQuery = readFileSync(filePath, "utf8");
-db.raw(migrationQuery);
+const info = await db.raw(migrationQuery);
+console.log(info);
 // bun Bruv-migrations/migrate.ts 
       `
     );
@@ -792,4 +848,13 @@ const Id = (): string => {
   buffer[10] = (inc >> 8) & 0xff;
   buffer[9] = (inc >> 16) & 0xff;
   return buffer.toString("hex");
+};
+
+const avoidError = (cb: { (): any; (): any; (): void }) => {
+  try {
+    cb();
+    return true;
+  } catch (error) {
+    return false;
+  }
 };
