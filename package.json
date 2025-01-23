@@ -9,7 +9,7 @@
     "dist/index.js"
   ],
   "scripts": {
-    "build": " rm -rf dist && tsc"
+    "compile": " rm -rf dist && tsc"
   },
   "keywords": [
     "SQL",
