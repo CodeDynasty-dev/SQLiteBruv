@@ -6,7 +6,6 @@ await db.raw(await user.getSql());
 const time = Date.now();
 const usero = await db.executeJsonQuery({
   action: "insert",
-  // where: [{ condition: "username = ? ", params: ["JohnDoe"] }],
   data: {
     name: "John Doe",
     username: "JohnDoe@" + time,
@@ -14,7 +13,7 @@ const usero = await db.executeJsonQuery({
   },
   from: "users",
 });
-// console.log({ usero });
+console.log({ usero });
 
 const a = await user.query.where("username = ? ", "JohnDoe@" + time).count();
 const result = await db.executeJsonQuery({

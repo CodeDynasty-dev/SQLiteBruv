@@ -8,7 +8,7 @@ import { randomBytes } from "node:crypto";
 interface BruvSchema<Model> {
   name: string;
   columns: {
-    [x in keyof Omit<Model, "_id">]: SchemaColumnOptions;
+    [x in keyof Omit<Model, "id">]: SchemaColumnOptions;
   };
 }
 
@@ -19,6 +19,7 @@ interface SchemaColumnOptions {
   default?: () => any;
   target?: string;
 }
+
 type Params = string | number | null | boolean;
 type rawSchema = { name: string; schema: { sql: string } };
 interface Query {
@@ -55,6 +56,11 @@ interface TursoConfig {
   url: string;
   authToken: string;
 }
+interface D1Config {
+  accountId: string;
+  databaseId: string;
+  apiKey: string;
+}
 
 // SqliteBruv class
 
@@ -68,16 +74,14 @@ export class SqliteBruv<
   private _conditions: string[] = [];
   private _tableName?: string = undefined;
   private _params: Params[] = [];
-  private _cacheName?: string;
   private _limit?: number;
   private _offset?: number;
   private _orderBy?: { column: string; direction: "ASC" | "DESC" };
-  private _query: boolean = false;
-  private _D1_api_key?: string;
-  private _D1_url?: string;
   private _logging: boolean = false;
   private _hotCache: Record<string | number, any> = {};
   private _turso?: TursoConfig;
+  private _D1?: TursoConfig;
+  private _QueryMode?: boolean = false;
   private readonly MAX_PARAMS = 100;
   private readonly ALLOWED_OPERATORS = [
     "=",
@@ -103,22 +107,37 @@ export class SqliteBruv<
   ];
   loading?: Promise<unknown>;
   constructor({
-    D1,
-    turso,
     logging,
     schema,
-    name,
+    D1Config,
+    TursoConfig,
+    localFile,
+    QueryMode,
   }: {
-    D1?: {
-      accountId: string;
-      databaseId: string;
-      apiKey: string;
-    };
-    turso?: TursoConfig;
+    D1Config?: D1Config;
+    TursoConfig?: TursoConfig;
+    QueryMode?: boolean;
+    localFile?: string;
     schema: Schema[];
     logging?: boolean;
-    name?: string;
   }) {
+    //? warning
+    if (
+      [D1Config, TursoConfig, localFile, QueryMode].filter((v) => v).length ===
+      0
+    ) {
+      throw new Error(
+        "\nPlease pass any of \n1. LocalFile or \n2. D1Config or \n3. TursoConfig\nin SqliteBruv constructor"
+      );
+    }
+    if (
+      [D1Config, TursoConfig, localFile, QueryMode].filter((v) => v).length > 1
+    ) {
+      throw new Error(
+        "\nPlease only pass one of \n1. LocalFile or \n2. D1Config or \n3. TursoConfig\nin SqliteBruv constructor"
+      );
+    }
+    // ?
     schema.forEach((s) => {
       s.db = this;
     });
@@ -131,7 +150,7 @@ export class SqliteBruv<
         Database = (await import("node:sqlite")).DatabaseSync;
       }
       // ?setup db
-      this.db = new Database((name || "Database") + ".sqlite", {
+      this.db = new Database((localFile || "Database") + ".sqlite", {
         create: true,
         strict: true,
       });
@@ -139,12 +158,17 @@ export class SqliteBruv<
         this.db.query = this.db.prepare;
       }
       this.dbMem = new Database(":memory:");
-      if (D1) {
-        const { accountId, databaseId, apiKey } = D1;
-        this._D1_url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`;
-        this._D1_api_key = apiKey;
+      if (D1Config) {
+        const { accountId, databaseId, apiKey } = D1Config;
+        this._D1 = {
+          url: `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`,
+          authToken: apiKey,
+        };
       }
       // ?
+      if (QueryMode === true) {
+        this._QueryMode = true;
+      }
       if (logging === true) {
         this._logging = true;
       }
@@ -176,8 +200,8 @@ export class SqliteBruv<
       } else {
         console.log("running migrations..");
       }
-      if (turso) {
-        this._turso = turso;
+      if (TursoConfig) {
+        this._turso = TursoConfig;
       }
       this.loading = undefined;
       r(undefined);
@@ -274,32 +298,18 @@ export class SqliteBruv<
     this._orderBy = { column, direction };
     return this;
   }
-  cacheAs(cacheName: string) {
-    this._cacheName = cacheName;
-    return this;
-  }
   invalidateCache(cacheName: string) {
     this._hotCache[cacheName] = undefined;
-    return this;
+    return undefined;
   }
-  get(): Promise<T[]> {
-    if (this._cacheName && this._hotCache[this._cacheName]) {
-      this._hotCache[this._cacheName];
-    }
+  get({ cacheAs }: { cacheAs?: string } = {}): Promise<T[]> {
+    if (cacheAs && this._hotCache[cacheAs]) return this._hotCache[cacheAs];
     const { query, params } = this.build();
-    if (this._query === true) {
-      return { query, params } as unknown as Promise<T[]>;
-    }
     return this.run(query, params, { single: false });
   }
-  getOne(): Promise<T> {
-    if (this._cacheName && this._hotCache[this._cacheName]) {
-      this._hotCache[this._cacheName];
-    }
+  getOne({ cacheAs }: { cacheAs?: string } = {}): Promise<T> {
+    if (cacheAs && this._hotCache[cacheAs]) return this._hotCache[cacheAs];
     const { query, params } = this.build();
-    if (this._query === true) {
-      return { query, params } as unknown as Promise<T>;
-    }
     return this.run(query, params, { single: true });
   }
   insert(data: T): Promise<T> {
@@ -308,13 +318,9 @@ export class SqliteBruv<
     const attributes = Object.keys(data);
     const columns = attributes.join(", ");
     const placeholders = attributes.map(() => "?").join(", ");
-
     const query = `INSERT INTO ${this._tableName} (${columns}) VALUES (${placeholders})`;
     const params = Object.values(data) as Params[];
     this.clear();
-    if (this._query === true) {
-      return { query, params } as unknown as Promise<T>;
-    }
     return this.run(query, params, { single: true });
   }
   update(data: Partial<T>): Promise<T> {
@@ -326,9 +332,6 @@ export class SqliteBruv<
     } SET ${columns} ${this._conditions.join(" AND ")}`;
     const params = [...(Object.values(data) as Params[]), ...this._params];
     this.clear();
-    if (this._query === true) {
-      return { query, params } as unknown as Promise<T>;
-    }
     return this.run(query, params);
   }
   delete(): Promise<T> {
@@ -337,41 +340,35 @@ export class SqliteBruv<
     )}`;
     const params = [...this._params];
     this.clear();
-    if (this._query === true) {
-      return { query, params } as unknown as Promise<T>;
-    }
     return this.run(query, params);
   }
-  count(): Promise<{
+  count({ cacheAs }: { cacheAs?: string } = {}): Promise<{
     [x: string]: any;
     count: number;
   }> {
+    if (cacheAs && this._hotCache[cacheAs]) return this._hotCache[cacheAs];
     const query = `SELECT COUNT(*) as count  FROM ${
       this._tableName
     } ${this._conditions.join(" AND ")}`;
     const params = [...this._params];
     this.clear();
-    if (this._query === true) {
-      return { query, params } as unknown as Promise<{
-        count: number;
-      }>;
-    }
     return this.run(query, params);
   }
 
   // Parser function
   async executeJsonQuery(query: Query): Promise<any> {
-    if (!query.action) {
-      throw new Error("Action is required.");
-    }
     if (!query.from) {
       throw new Error("Table is required.");
     }
     let queryBuilder = this.from(query.from);
+    if (!query.action) {
+      if (query.invalidateCache)
+        return queryBuilder.invalidateCache(query.invalidateCache);
+      throw new Error("Action is required.");
+    }
     if (query.select) queryBuilder = queryBuilder.select(...query.select);
     if (query.limit) queryBuilder = queryBuilder.limit(query.limit);
     if (query.offset) queryBuilder = queryBuilder.offset(query.offset);
-    if (query.cacheAs) queryBuilder = queryBuilder.cacheAs(query.cacheAs);
     if (query.where) {
       for (const condition of query.where) {
         queryBuilder = queryBuilder.where(
@@ -411,13 +408,13 @@ export class SqliteBruv<
     try {
       switch (query.action) {
         case "get":
-          result = await queryBuilder.get();
+          result = await queryBuilder.get({ cacheAs: query.cacheAs });
           break;
         case "count":
-          result = await queryBuilder.count();
+          result = await queryBuilder.count({ cacheAs: query.cacheAs });
           break;
         case "getOne":
-          result = await queryBuilder.getOne();
+          result = await queryBuilder.getOne({ cacheAs: query.cacheAs });
           break;
         case "insert":
           if (!query.data) {
@@ -441,10 +438,6 @@ export class SqliteBruv<
           break;
         default:
           throw new Error("Invalid action specified.");
-      }
-
-      if (query.invalidateCache) {
-        queryBuilder.invalidateCache(query.invalidateCache);
       }
     } catch (error) {
       // Handle errors and return appropriate response
@@ -485,47 +478,66 @@ export class SqliteBruv<
   private async run(
     query: string,
     params: (string | number | null | boolean)[],
-    { single }: { single?: boolean } = {}
+    { single, cacheName }: { single?: boolean; cacheName?: string } = {}
   ) {
     if (this.loading) await this.loading;
+    if (this._QueryMode) return { query, params } as any;
     if (this._logging) {
       console.log({ query, params });
     }
+    // turso
     if (this._turso) {
-      const results = await this.executeTursoQuery(query, params);
+      let results = await this.executeTursoQuery(query, params);
+
       if (single) {
-        return results[0];
+        results = results[0];
+      }
+      if (cacheName) {
+        return this.cacheResponse(results, cacheName);
       }
       return results;
     }
-    if (this._D1_api_key) {
-      const res = await fetch(this._D1_url as string, {
+    // d1
+    if (this._D1) {
+      const res = await fetch(this._D1.url, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${this._D1_api_key}`,
+          Authorization: `Bearer ${this._D1.authToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ sql: query, params }),
       });
       const data = await res.json();
+      let result;
       if (data.success && data.result[0].success) {
         if (single) {
-          return data.result[0].results[0];
+          result = data.result[0].results[0];
         } else {
-          return data.result[0].results;
+          result = data.result[0].results;
         }
+        if (cacheName) {
+          return this.cacheResponse(result, cacheName);
+        }
+        return result;
       }
       throw new Error(JSON.stringify(data.errors));
     }
+    // local db
     if (single === true) {
-      if (this._cacheName) {
-        return this.cacheResponse(this.db.query(query).get(...params));
+      if (cacheName) {
+        return this.cacheResponse(
+          this.db.query(query).get(...params),
+          cacheName
+        );
       }
       return this.db.query(query).get(...params);
     }
     if (single === false) {
-      if (this._cacheName) {
-        return this.cacheResponse(this.db.query(query).all(...params));
+      if (cacheName) {
+        return this.cacheResponse(
+          this.db.query(query).all(...params),
+          cacheName
+        );
       }
       return this.db.query(query).all(...params);
     }
@@ -556,6 +568,7 @@ export class SqliteBruv<
     });
 
     if (!response.ok) {
+      console.error(await response.text());
       throw new Error(`Turso API error: ${response.statusText}`);
     }
 
@@ -579,9 +592,9 @@ export class SqliteBruv<
   raw(raw: string, params: (string | number | boolean)[] = []) {
     return this.run(raw, params);
   }
-  async cacheResponse(response: any) {
+  async cacheResponse(response: any, cacheName?: string) {
     await response;
-    this._hotCache[this._cacheName!] = response;
+    this._hotCache[cacheName!] = response;
     return response;
   }
 }
@@ -590,7 +603,7 @@ export class Schema<Model extends Record<string, any> = {}> {
   private string: string = "";
   name: string;
   db?: SqliteBruv;
-  columns: { [x in keyof Omit<Model, "_id">]: SchemaColumnOptions };
+  columns: { [x in keyof Omit<Model, "id">]: SchemaColumnOptions };
   constructor(def: BruvSchema<Model>) {
     this.name = def.name;
     this.columns = def.columns;

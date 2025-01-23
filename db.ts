@@ -56,11 +56,12 @@ export const works = new Schema<{
 
 export const db = new SqliteBruv({
   schema: [user, works],
-  // turso: {
+  QueryMode: true,
+  // TursoConfig: {
   //   url: process.env.TURSO_URL!,
   //   authToken: process.env.TURSO_AUTH_TOKEN!,
   // },
-  // D1: {
+  // D1Config: {
   //   accountId: process.env.CFAccountId!,
   //   databaseId: process.env.D1databaseId!,
   //   apiKey: process.env.CFauthorizationToken!,
