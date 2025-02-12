@@ -719,7 +719,13 @@ async function generateMigration(
       // Table dropped
       shouldMigrate = true;
       upStatements.push(`DROP TABLE ${tableName};`);
-      downStatements.push("-- " + currentSql + ";");
+      downStatements.push(
+        "-- " +
+          currentSql
+            .replace(tableName, `${tableName}_old`)
+            .replaceAll("\n", "\n--") +
+          ";"
+      );
       continue;
     }
 
