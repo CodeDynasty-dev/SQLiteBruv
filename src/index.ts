@@ -228,8 +228,6 @@ export class SqliteBruv<
               currentSchema || [],
               targetSchema || []
             );
-            console.log(migration);
-
             await createMigrationFileIfNeeded(migration);
           })
           .catch((e) => {
@@ -707,9 +705,10 @@ async function getSchema(db: SqliteBruv<{}>): Promise<rawSchema[] | void> {
       schema = [];
     if (!db._localFile) {
       tables =
-        (await db.run("SELECT name FROM sqlite_master WHERE type='table'", [], {
-          single: true,
-        })) || {};
+        (await db.run(
+          "SELECT name FROM sqlite_master WHERE type='table'",
+          []
+        )) || {};
       schema = await Promise.all(
         Object.values(tables).map(async (table: any) => ({
           name: table.name,
@@ -753,11 +752,17 @@ async function generateMigration(
     return { up: "", down: "" };
 
   const currentTables: Record<string, string> = Object.fromEntries(
-    currentSchema.map(({ name, schema }) => [name, schema.sql])
+    currentSchema.map(({ name, schema }) => [
+      name,
+      Array.isArray(schema) ? schema[0].sql : schema.sql,
+    ])
   );
 
   const targetTables: Record<string, string> = Object.fromEntries(
-    targetSchema.map(({ name, schema }) => [name, schema.sql])
+    targetSchema.map(({ name, schema }) => [
+      name,
+      Array.isArray(schema) ? schema[0].sql : schema.sql,
+    ])
   );
 
   let upStatements: string[] = ["-- Up migration"];
