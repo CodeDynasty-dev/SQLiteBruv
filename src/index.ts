@@ -1,6 +1,6 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, unlinkSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import path, { join } from "node:path";
 import { randomBytes } from "node:crypto";
 
 // TYPES:
@@ -68,8 +68,14 @@ export class SqliteBruv<
   T extends Record<string, Params> = Record<string, Params>
 > {
   static migrationFolder = "./Bruv-migrations";
-  private db: any;
-  dbMem: any;
+  /**
+   * @internal
+   */
+  db?: any;
+  /**
+   * @internal
+   */
+  _localFile?: any;
   private _columns: string[] = ["*"];
   private _conditions: string[] = [];
   private _tableName?: string = undefined;
@@ -113,6 +119,7 @@ export class SqliteBruv<
     TursoConfig,
     localFile,
     QueryMode,
+    createMigrations,
   }: {
     D1Config?: D1Config;
     TursoConfig?: TursoConfig;
@@ -120,6 +127,7 @@ export class SqliteBruv<
     localFile?: string;
     schema: Schema[];
     logging?: boolean;
+    createMigrations?: boolean;
   }) {
     //? warning
     if (
@@ -137,7 +145,7 @@ export class SqliteBruv<
         "\nPlease only pass one of \n1. LocalFile or \n2. D1Config or \n3. TursoConfig\nin SqliteBruv constructor"
       );
     }
-    // ?
+    // ? setup each schema
     schema.forEach((s) => {
       s.db = this;
     });
@@ -150,14 +158,17 @@ export class SqliteBruv<
         Database = (await import("node:sqlite")).DatabaseSync;
       }
       // ?setup db
-      this.db = new Database((localFile || "Database") + ".sqlite", {
-        create: true,
-        strict: true,
-      });
-      if (!bun) {
-        this.db.query = this.db.prepare;
+      if (localFile) {
+        this._localFile = true;
+        this.db = new Database(localFile, {
+          create: true,
+          strict: true,
+        });
+        if (!bun) {
+          this.db.query = this.db.prepare;
+        }
       }
-      this.dbMem = new Database(":memory:");
+      //? D1 setup
       if (D1Config) {
         const { accountId, databaseId, apiKey } = D1Config;
         this._D1 = {
@@ -165,43 +176,68 @@ export class SqliteBruv<
           authToken: apiKey,
         };
       }
-      // ?
+      //? Turso setup
+      if (TursoConfig) {
+        this._turso = TursoConfig;
+      }
+      // ? setup
       if (QueryMode === true) {
         this._QueryMode = true;
       }
+      //? logger setup
       if (logging === true) {
         this._logging = true;
       }
-      // ? get and set db for each schema
+
       if (!schema?.length) {
         throw new Error("Not database schema passed!");
       } else {
+        // ? init each schema
         schema.forEach((s) => {
-          s._induce();
+          s.db = this;
         });
       }
-      //? Auto create migration files
-      const isMigrating = process.argv
-        .slice(1)
-        .some((v) => v.includes("Bruv-migrations/migrate.ts"));
-      if (!isMigrating) {
-        Promise.all([getSchema(this.db), getSchema(this.dbMem)])
+      //? evaluate conditions for calculating migration
+      const shouldMigrate =
+        !process.argv
+          .slice(1)
+          .some((v) => v.includes("Bruv-migrations/migrate.ts")) &&
+        createMigrations !== false &&
+        QueryMode !== true;
+      //? Auto create migration files if needed
+      if (shouldMigrate) {
+        const clonedSchema = schema.map((s) => s._clone());
+        const tempDbPath = path.join(import.meta.dirname, "./temp.sqlite");
+        const tempDb = new SqliteBruv({
+          schema: clonedSchema,
+          localFile: tempDbPath,
+          createMigrations: false,
+        });
+
+        // ? init each schema
+        clonedSchema
+          .map((s) => s._clone())
+          .forEach((s) => {
+            s.db = tempDb;
+            if (!QueryMode) s._induce();
+          });
+
+        Promise.all([getSchema(this), getSchema(tempDb)])
           .then(async ([currentSchema, targetSchema]) => {
             const migration = await generateMigration(
               currentSchema || [],
               targetSchema || []
             );
+            console.log(migration);
+
             await createMigrationFileIfNeeded(migration);
-            this.dbMem.close();
           })
           .catch((e) => {
             console.log(e);
+          })
+          .finally(() => {
+            unlinkSync(tempDbPath);
           });
-      } else {
-        console.log("running migrations..");
-      }
-      if (TursoConfig) {
-        this._turso = TursoConfig;
       }
       this.loading = undefined;
       r(undefined);
@@ -347,12 +383,12 @@ export class SqliteBruv<
     count: number;
   }> {
     if (cacheAs && this._hotCache[cacheAs]) return this._hotCache[cacheAs];
-    const query = `SELECT COUNT(*) as count  FROM ${
+    const query = `SELECT COUNT(*) as count FROM ${
       this._tableName
     } ${this._conditions.join(" AND ")}`;
     const params = [...this._params];
     this.clear();
-    return this.run(query, params);
+    return this.run(query, params, { single: true });
   }
 
   // Parser function
@@ -442,7 +478,6 @@ export class SqliteBruv<
     } catch (error) {
       // Handle errors and return appropriate response
       console.error("Query execution failed:", error);
-      throw new Error("Query execution failed.");
     }
 
     return result;
@@ -475,7 +510,10 @@ export class SqliteBruv<
     this._orderBy = undefined;
     this._tableName = undefined;
   }
-  private async run(
+  /**
+   * @internal
+   */
+  async run(
     query: string,
     params: (string | number | null | boolean)[],
     { single, cacheName }: { single?: boolean; cacheName?: string } = {}
@@ -592,6 +630,9 @@ export class SqliteBruv<
   raw(raw: string, params: (string | number | boolean)[] = []) {
     return this.run(raw, params);
   }
+  rawAll(raw: string) {
+    return this.db.prepare(raw).all();
+  }
   async cacheResponse(response: any, cacheName?: string) {
     await response;
     this._hotCache[cacheName!] = response;
@@ -609,11 +650,17 @@ export class Schema<Model extends Record<string, any> = {}> {
     this.columns = def.columns;
   }
   get query() {
-    return this.db?.from(this.name) as SqliteBruv<Model>;
+    if (this.db?.loading) {
+      throw new Error("Database not loaded yet!!");
+    }
+    return this.db!.from(this.name) as SqliteBruv<Model>;
   }
   queryRaw(raw: string) {
     return this.db?.from(this.name).raw(raw, [])!;
   }
+  /**
+   * @internal
+   */
   _induce() {
     const tables = Object.keys(this.columns);
     this.string = `CREATE TABLE IF NOT EXISTS ${
@@ -637,10 +684,15 @@ export class Schema<Model extends Record<string, any> = {}> {
       .join(" ")})`;
     try {
       this.db?.raw(this.string);
-      this.db?.dbMem.exec(this.string);
     } catch (error) {
       console.log({ err: String(error), schema: this.string });
     }
+  }
+  /**
+   * @internal
+   */
+  _clone() {
+    return new Schema<Model>({ columns: this.columns, name: this.name });
   }
   async getSql() {
     await this.db?.loading;
@@ -648,25 +700,48 @@ export class Schema<Model extends Record<string, any> = {}> {
   }
 }
 
-async function getSchema(db: any): Promise<rawSchema[] | void> {
+async function getSchema(db: SqliteBruv<{}>): Promise<rawSchema[] | void> {
+  if (db.loading) await db.loading;
   try {
-    const tables = await db
-      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
-      .all();
-    const schema = await Promise.all(
-      tables.map(async (table: any) => ({
-        name: table.name,
-        schema: await db
-          .prepare(
-            `SELECT sql FROM sqlite_master WHERE type='table' AND name = ?`
+    let tables = {},
+      schema = [];
+    if (!db._localFile) {
+      tables =
+        (await db.run("SELECT name FROM sqlite_master WHERE type='table'", [], {
+          single: true,
+        })) || {};
+      schema = await Promise.all(
+        Object.values(tables).map(async (table: any) => ({
+          name: table.name,
+          schema: await db.run(
+            `SELECT sql FROM sqlite_master WHERE type='table' AND name='${table.name}'`,
+            [],
+            { single: false }
+          ),
+        }))
+      );
+    } else {
+      tables =
+        (
+          await db.db.prepare(
+            "SELECT name FROM sqlite_master WHERE type='table'"
           )
-          .get(table.name),
-      }))
-    );
+        ).all() || {};
+      schema = await Promise.all(
+        Object.values(tables).map(async (table: any) => ({
+          name: table.name,
+          schema: await db.db
+            .prepare(
+              `SELECT sql FROM sqlite_master WHERE type='table' AND name='${table.name}'`
+            )
+            .get(),
+        }))
+      );
+    }
     return schema;
   } catch (error) {
     console.error(error);
-    db.close(); // Close connection
+    //todo: Close the db connection
   }
 }
 
@@ -674,7 +749,8 @@ async function generateMigration(
   currentSchema: rawSchema[],
   targetSchema: rawSchema[]
 ): Promise<{ up: string; down: string }> {
-  if (!targetSchema?.length) return { up: "", down: "" };
+  if (!targetSchema?.length || targetSchema[0].name == null)
+    return { up: "", down: "" };
 
   const currentTables: Record<string, string> = Object.fromEntries(
     currentSchema.map(({ name, schema }) => [name, schema.sql])
@@ -684,8 +760,8 @@ async function generateMigration(
     targetSchema.map(({ name, schema }) => [name, schema.sql])
   );
 
-  let upStatements: string[] = ["-- Up migration", "BEGIN IMMEDIATE;"];
-  let downStatements: string[] = ["-- Down migration", "-- BEGIN IMMEDIATE;"];
+  let upStatements: string[] = ["-- Up migration"];
+  let downStatements: string[] = ["-- Down migration"];
 
   // Helper function to parse column definitions
   function parseSchema(
@@ -787,9 +863,6 @@ async function generateMigration(
     }
   }
 
-  upStatements.push("COMMIT;");
-  downStatements.push("-- COMMIT;");
-
   return shouldMigrate
     ? { up: upStatements.join("\n"), down: downStatements.join("\n") }
     : { up: "", down: "" };
@@ -814,7 +887,7 @@ async function createMigrationFileIfNeeded(
       filepath2,
       `// Don't rename this file or the directory
 // import your db class correctly below and run the file to apply.
-import { db } from "path/to/db";
+import { db } from "path/to/db-class-instance";
 import { readFileSync } from "node:fs";
 
 const filePath = "${filepath}";

@@ -1,10 +1,10 @@
 import { db, user, works } from "./db.ts";
 
-await db.raw(await user.getSql());
+// await db.raw(await user.getSql());
 
 // await db.raw(works.toString());
 const time = Date.now();
-const usero = await db.executeJsonQuery({
+await db.executeJsonQuery({
   action: "insert",
   data: {
     name: "John Doe",
@@ -13,9 +13,10 @@ const usero = await db.executeJsonQuery({
   },
   from: "users",
 });
-console.log({ usero });
 
 const a = await user.query.where("username = ? ", "JohnDoe@" + time).count();
+const c = await user.query.count();
+console.log({ a, c });
 const result = await db.executeJsonQuery({
   action: "getOne",
   where: [{ condition: "username =? ", params: ["JohnDoe@" + time] }],

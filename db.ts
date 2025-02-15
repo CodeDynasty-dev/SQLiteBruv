@@ -32,11 +32,12 @@ export const works = new Schema<{
   name: string;
   user: string;
   createdAt: Date;
+  rating: number;
 }>({
   name: "works",
   columns: {
     name: {
-      unique: true,
+      // unique: true,
       type: "TEXT",
       required: true,
     },
@@ -44,6 +45,12 @@ export const works = new Schema<{
       type: "TEXT",
       required: true,
       target: "users",
+    },
+    rating: {
+      type: "INTEGER",
+      default() {
+        return 1;
+      },
     },
     createdAt: {
       type: "DATETIME",
@@ -56,15 +63,16 @@ export const works = new Schema<{
 
 export const db = new SqliteBruv({
   schema: [user, works],
-  QueryMode: true,
-  // TursoConfig: {
-  //   url: process.env.TURSO_URL!,
-  //   authToken: process.env.TURSO_AUTH_TOKEN!,
-  // },
+  // QueryMode: true,
+  TursoConfig: {
+    url: process.env.TURSO_URL!,
+    authToken: process.env.TURSO_AUTH_TOKEN!,
+  },
   // D1Config: {
   //   accountId: process.env.CFAccountId!,
   //   databaseId: process.env.D1databaseId!,
   //   apiKey: process.env.CFauthorizationToken!,
   // },
-  // logging: true,
+  // localFile: "sample.sqlite",
+  logging: true,
 });

@@ -14,6 +14,7 @@
     // Some stricter flags
     "useUnknownInCatchVariables": true,
     "noPropertyAccessFromIndexSignature": true,
+    "stripInternal": true,
     "outDir": "./dist"
   },
   "include": ["src"]
