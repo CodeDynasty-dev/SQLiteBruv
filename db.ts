@@ -49,8 +49,9 @@ export const works = new Schema<{
     rating: {
       type: "INTEGER",
       default() {
-        return 1;
+        return "1";
       },
+      check: ["1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5"],
     },
     createdAt: {
       type: "DATETIME",

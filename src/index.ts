@@ -18,6 +18,7 @@ interface SchemaColumnOptions {
   unique?: boolean;
   default?: () => string;
   target?: string;
+  check?: string[];
 }
 
 type Params = string | number | null | boolean;
@@ -673,6 +674,13 @@ export class Schema<Model extends Record<string, any> = {}> {
           (this.columns[col].required ? " NOT NULL" : "") +
           (this.columns[col].target
             ? " REFERENCES " + this.columns[col].target + "(id)"
+            : "") +
+          (this.columns[col].check?.length
+            ? "  CHECK (" +
+              col +
+              " IN (" +
+              this.columns[col].check.map((c) => "'" + c + "'").join(",") +
+              ")) "
             : "") +
           (this.columns[col].default
             ? "  DEFAULT " + this.columns[col].default()
