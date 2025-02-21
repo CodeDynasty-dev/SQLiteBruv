@@ -16,7 +16,7 @@ interface SchemaColumnOptions {
   type: "INTEGER" | "REAL" | "TEXT" | "DATETIME";
   required?: boolean;
   unique?: boolean;
-  default?: () => any;
+  default?: () => string;
   target?: string;
 }
 
@@ -878,7 +878,7 @@ async function createMigrationFileIfNeeded(
 ) {
   if (!migration?.up || !migration?.down) return;
   const timestamp = new Date().toString().split(" ").slice(0, 5).join("_");
-  const filename = `${timestamp}_auto_migration.sql`;
+  const filename = `${timestamp}.sql`;
   const filepath = join(SqliteBruv.migrationFolder, filename);
   const filepath2 = join(SqliteBruv.migrationFolder, "migrate.ts");
   const fileContent = `${migration.up}\n\n${migration.down}`;
