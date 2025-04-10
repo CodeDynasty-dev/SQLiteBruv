@@ -15,7 +15,9 @@
     "useUnknownInCatchVariables": true,
     "noPropertyAccessFromIndexSignature": true,
     "stripInternal": true,
-    "outDir": "./dist"
+    "outDir": "./dist",
+    "skipDefaultLibCheck": true,
+    "skipLibCheck": true
   },
   "include": ["src"]
 }

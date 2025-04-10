@@ -165,9 +165,6 @@ export class SqliteBruv<
           create: true,
           strict: true,
         });
-        if (!bun) {
-          this.db.query = this.db.prepare;
-        }
       }
       //? D1 setup
       if (D1Config) {
@@ -572,13 +569,13 @@ export class SqliteBruv<
     if (single === false) {
       if (cacheName) {
         return this.cacheResponse(
-          this.db.query(query).all(...params),
+          this.db.prepare(query).all(...params),
           cacheName
         );
       }
-      return this.db.query(query).all(...params);
+      return this.db.prepare(query).all(...params);
     }
-    return this.db.exec(query);
+    return this.db.prepare(query).run(...params);
   }
   private async executeTursoQuery(
     query: string,
