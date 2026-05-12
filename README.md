@@ -129,19 +129,19 @@ Prisma-style CLI. Schema source of truth is `./bruv/schema.prisma`. Migrations l
 
 ```bash
 # Generate + apply migration (uses local dev.db)
-bun src/cli.ts migrate dev --name add_age_column
+npx bruv-cli migrate dev --name add_age_column
 
 # Apply pending migrations to production DB (reads env vars)
-bun src/cli.ts migrate deploy
+npx bruv-cli migrate deploy
 
 # Rollback last migration
-bun src/cli.ts migrate reset
+npx bruv-cli migrate reset
 
 # Check status
-bun src/cli.ts migrate status
+npx bruv-cli migrate status
 
 # Push schema directly, no migration file
-bun src/cli.ts db push
+npx bruv-cli db push
 ```
 
 Connection is resolved from environment variables:

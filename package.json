@@ -8,6 +8,9 @@
     "dist/index.d.ts",
     "dist/index.js"
   ],
+  "bin": {
+    "bruv-cli": "dist/cli.js"
+  },
   "scripts": {
     "compile": " rm -rf dist && tsc"
   },
