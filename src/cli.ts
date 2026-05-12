@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 /**
  * SQLiteBruv CLI — Prisma-style migration workflow.
  *
@@ -13,7 +13,13 @@
  *   bun bruv db push                     Push schema directly (no migration file)
  */
 
-import { SqliteBruv, Schema, getSchema, generateMigration, parsePrismaSchema } from "./index.js";
+import {
+  SqliteBruv,
+  Schema,
+  getSchema,
+  generateMigration,
+  parsePrismaSchema,
+} from "./index.js";
 import { mkdir, writeFile, unlink } from "node:fs/promises";
 import { readdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "path";
@@ -129,11 +135,21 @@ async function migrateDev(db: SqliteBruv, name: string, schema: Schema[]) {
 
   const tempPath = join(process.cwd(), ".bruv_temp.sqlite");
   const cloned = schema.map((s) => s._clone());
-  const tempDb = new SqliteBruv({ schema: cloned, localFile: tempPath, createMigrations: false });
+  const tempDb = new SqliteBruv({
+    schema: cloned,
+    localFile: tempPath,
+    createMigrations: false,
+  });
   await tempDb.loading;
-  cloned.forEach((s) => { s.db = tempDb; s._induce(); });
+  cloned.forEach((s) => {
+    s.db = tempDb;
+    s._induce();
+  });
 
-  const [current, target] = await Promise.all([getSchema(db), getSchema(tempDb)]);
+  const [current, target] = await Promise.all([
+    getSchema(db),
+    getSchema(tempDb),
+  ]);
   const migration = await generateMigration(current || [], target || []);
 
   if (existsSync(tempPath)) await unlink(tempPath);
@@ -143,7 +159,11 @@ async function migrateDev(db: SqliteBruv, name: string, schema: Schema[]) {
     return;
   }
 
-  const ts = new Date().toISOString().replace(/[-:]/g, '').split('.')[0].replace('T', '');
+  const ts = new Date()
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .split(".")[0]
+    .replace("T", "");
   const safeName = name.replace(/\W+/g, "_").toLowerCase();
   const filename = `${ts}_${safeName}.sql`;
   const content = `-- --> up\n${migration.up.trim()}\n\n-- --> down\n${migration.down.trim()}\n`;
@@ -157,7 +177,7 @@ async function migrateDev(db: SqliteBruv, name: string, schema: Schema[]) {
 }
 
 async function applyMigration(db: SqliteBruv, file: string) {
-  await ensureTable(db); 
+  await ensureTable(db);
   const sql = readFileSync(join(FOLDER, file), "utf8");
   const upSql = sql.split("-- --> down")[0].replace("-- --> up", "").trim();
 
