@@ -1,388 +1,202 @@
-# SQLiteBruv Query Builder
+# SQLiteBruv
 
-A Tiny Type-Safe, Secure SQLite Query Builder with D1/Turso support with built-in migrations and security features.
+A small, zero-dependency SQLite query builder for Bun with Prisma-style migrations. Supports local SQLite, Cloudflare D1, and Turso.
 
 [![npm version](https://badge.fury.io/js/sqlitebruv.svg)](https://www.npmjs.com/package/sqlitebruv)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![npm](https://img.shields.io/npm/dm/sqlitebruv.svg)](https://www.npmjs.com/package/sqlitebruv) [![TypeScript](https://img.shields.io/badge/Typescript-%3E%3D4.0-blue.svg)](https://www.typescriptlang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![npm](https://img.shields.io/npm/dm/sqlitebruv.svg)](https://www.npmjs.com/package/sqlitebruv)
 
-## Features
+<img src="https://github.com/FridayCandour/SQLiteBruv/blob/main/icon.png?raw=true" width="200" />
 
-- 🛡️ Security-first design with SQL injection prevention
-- 📡 JSON interface for http no sql queries
-- 🔄 Automatic schema migrations
-- 🏃‍♂️ In-memory caching
-- 🌐 Cloudflare D1 & Turso support
-- 📝 Type-safe queries
-- 🔍 Query validation & sanitization
-- 📊 Schema management
-- 🌠 Bunjs Support 100%
-
-<center>
-<img src="https://github.com/FridayCandour/SQLiteBruv/blob/main/icon.png?raw=true" style="width: 320px; margin: auto;" />
-</center>
-## Installation
+## Install
 
 ```bash
-npm install sqlite-bruv
+bun add sqlitebruv
 ```
 
-## 🚀 Updates
+## Quick start
 
-- **Light weight**: Zero dependency and small size.
-- **Bun-Ready**: built for Bunjs
-- **Platform Support**:
-  - Cloudflare D1
-  - Turso
-  - Local SQLite
-  - raw query output
-- **Security**: SQL injection prevention, query validation, parameter sanitization
-- **Type Safety**: Full TypeScript support with inferred types
-- **Migrations**: Automatic schema diff detection and migration generation
-- **Caching**: Built-in memory caching with invalidation
-- **Relations**: Support for one-to-one and one-to-many relationships
+Define your schema in `./bruv/schema.prisma`:
 
-## 📦 Installation
+```prisma
+model User {
+  id    String @id @default(uuid())
+  email String @unique
+  name  String?
+  age   Int?
+}
 
-```bash
-# bun
-bun add sqlite-bruv
-
-# npm
-npm install sqlite-bruv
+model Post {
+  id      String @id @default(uuid())
+  title   String
+  userId  String
+}
 ```
 
-## Usage/Examples
+Initialize the database. Schema is auto-loaded from `./bruv/schema.prisma`:
 
-```typescript
-import { SqliteBruv, Schema } from "sqlite-bruv";
-
-// Define your schema
-const UserSchema = new Schema<{
-  name: string;
-  email: string;
-  role: "admin" | "user";
-  createdAt: Date;
-}>({
-  name: "users",
-  columns: {
-    name: { type: "TEXT", required: true },
-    email: { type: "TEXT", unique: true },
-    role: { type: "TEXT", default: () => "user" },
-    createdAt: { type: "DATETIME", default: () => new Date() },
-  },
-});
-
-const PostSchema = new Schema({
-  name: "posts",
-  columns: {
-    title: { type: "TEXT", required: true },
-    content: { type: "TEXT" },
-    userId: {
-      type: "TEXT",
-      target: "users",
-      relationType: "ONE",
-    },
-  },
-});
-
-const CommentSchema = new Schema({
-  name: "comments",
-  columns: {
-    content: { type: "TEXT", required: true },
-    postId: {
-      type: "TEXT",
-      target: "posts",
-      relationType: "MANY",
-    },
-  },
-});
-
-// Initialize database
+```ts
+import { SqliteBruv } from "sqlitebruv";
 
 const db = new SqliteBruv({
-  schema: [UserSchema],
+  localFile: "./app.db",
 });
 ```
 
-Platform-Specific Setup
-Cloudflare D1
+Query:
 
-```typescript
+```ts
+await db.from("users").insert({ name: "friday", email: "f@dev.io" });
+
+const users = await db.from("users").where("age > ?", 18).get();
+
+const one = await db.from("users").where("id = ?", id).getOne();
+```
+
+## Platforms
+
+```ts
+// Cloudflare D1
 const db = new SqliteBruv({
-  D1: {
-    accountId: process.env.CF_ACCOUNT_ID,
-    databaseId: process.env.D1_DATABASE_ID,
-    apiKey: process.env.CF_API_KEY,
+  D1Config: {
+    accountId: process.env.CFAccountId,
+    databaseId: process.env.D1databaseId,
+    apiKey: process.env.CFauthorizationToken,
   },
-  schema: [UserSchema, PostSchema, CommentSchema],
 });
-```
 
-Turso;
-
-```typescript
+// Turso
 const db = new SqliteBruv({
-  turso: {
+  TursoConfig: {
     url: process.env.TURSO_URL,
     authToken: process.env.TURSO_AUTH_TOKEN,
   },
-  schema: [UserSchema, PostSchema, CommentSchema],
+});
+
+// Local SQLite (default)
+const db = new SqliteBruv({
+  localFile: "./app.db",
 });
 ```
 
-## Example usage:
+## Query API
 
-```typescript
-const queryBuilder = new SqliteBruv({
-  schema: [UserSchema, PostSchema, CommentSchema],
-});
+```ts
+// Select
+db.from("users").select("id", "name").get();
 
-// Insert
-await queryBuilder
-  .from("users")
-  .insert({ name: "John Doe", email: "john@example.com" })
-  .then((changes) => {
-    // console.log({ changes });
-  });
+// Where chains
+db.from("users")
+  .where("age > ?", 18)
+  .andWhere("country = ?", "NG")
+  .orWhere("role = ?", "admin")
+  .get();
+
+// Pagination
+db.from("users").orderBy("name", "ASC").limit(10).offset(20).get();
+
+// Single record
+db.from("users").where("id = ?", id).getOne();
+
+// Count
+db.from("users").where("active = ?", true).count();
+
+// Insert (id is auto-generated)
+db.from("users").insert({ name: "friday", email: "f@dev.io" });
 
 // Update
-await queryBuilder
-  .from("users")
-  .where("id = ?", 1)
-  .update({ name: "Jane Doe" })
-  .then((changes) => {
-    // console.log({ changes });
-  });
-
-// Search
-await queryBuilder
-  .from("users")
-  .where("id = ?", 1)
-  .andWhere("name LIKE ?", `%oh%`)
-  .get()
-  .then((changes) => {
-    // console.log({ changes });
-  });
+db.from("users").where("id = ?", id).update({ name: "saturday" });
 
 // Delete
-await queryBuilder
-  .from("users")
-  .where("id = ?", 1)
-  .delete()
-  .then((changes) => {
-    console.log({ changes });
-  });
+db.from("users").where("id = ?", id).delete();
 
-// Get all users
-queryBuilder
-  .from("users")
-  .get()
-  .then((changes) => {
-    // console.log({ changes });
-  });
-
-// Get one user
-await queryBuilder
-  .from("users")
-  .where("id = ?", 1)
-  .getOne()
-  .then((changes) => {
-    // console.log({ changes });
-  });
-
-// Select specific columns
-await queryBuilder
-  .from("users")
-  .select("id", "name")
-  .get()
-  .then((changes) => {
-    // console.log({ changes });
-  });
-
-// Where conditions
-await queryBuilder
-  .from("users")
-  .where("age > ?", 18)
-  .get()
-  .then((changes) => {
-    // console.log({ changes });
-  });
-
-// AndWhere conditions
-await queryBuilder
-  .from("users")
-  .where("age > ?", 18)
-  .andWhere("country = ?", "USA")
-  .get()
-  .then((changes) => {
-    // console.log({ changes });
-  });
-
-// OrWhere conditions
-await queryBuilder
-  .from("users")
-  .where("age > ?", 18)
-  .orWhere("country = ?", "Canada")
-  .get()
-  .then((changes) => {
-    // console.log({ changes });
-  });
-
-// Limit and Offset
-await queryBuilder
-  .from("users")
-  .limit(10)
-  .offset(5)
-  .get()
-  .then((changes) => {
-    // console.log({ changes });
-  });
-
-// OrderBy
-await queryBuilder
-  .from("users")
-  .orderBy("name", "ASC")
-  .get()
-  .then((changes) => {
-    // console.log({ changes });
-  });
-
-await queryBuilder
-  .from("users")
-  .orderBy("name", "ASC")
-  .get()
-  .then((changes) => {
-    // console.log({ changes });
-  });
+// Raw SQL
+db.raw("SELECT * FROM users WHERE id = ?", [id]);
 ```
 
-## 💡 Advanced Usage
-
-Complex Queries
+## Caching
 
 ```ts
-// Relations and joins
-const posts = await db
-  .from("posts")
-  .select("posts.*", "users.name as author")
-  .where("posts.published = ?", true)
-  .andWhere("posts.views > ?", 1000)
-  .orderBy("posts.createdAt", "DESC")
-  .limit(10)
-  .get();
+const users = await db.from("users").get({ cacheAs: "all-users" });
 
-// Raw queries with safety
-await db.raw("SELECT * FROM users WHERE id = ?", [userId]);
-
-// Cache usage
-const users = await db
-  .from("users")
-  .select("*")
-  .where("active = ?", true)
-  .cacheAs("active-users")
-  .get();
-
-// Cache invalidation
-db.invalidateCache("active-users");
+// Later
+db.invalidateCache("all-users");
 ```
 
-## Using from over the network via JSON interface
+## Migrations
 
-```typescript
-//  JSON interface structure
-interface Query {
-  from: string;
-  select?: string[];
-  where?: {
-    condition: string;
-    params: any[];
-  }[];
-  andWhere?: {
-    condition: string;
-    params: any[];
-  }[];
-  orWhere?: {
-    condition: string;
-    params: any[];
-  }[];
-  orderBy?: {
-    column: string;
-    direction: "ASC" | "DESC";
-  };
-  limit?: number;
-  offset?: number;
-  cacheAs?: string;
-  invalidateCache?: string;
-  action?: "get" | "getOne" | "insert" | "update" | "delete" | "count";
-  /**
-  ### For insert and update only
-  */
-  data?: any;
-}
-// Example usage in an Express.js route
-import express from "express";
-const app = express();
-app.use(express.json());
+Prisma-style CLI. Schema source of truth is `./bruv/schema.prisma`. Migrations live in `./bruv/migrations/`.
 
-app.post("/execute-query", async (req, res) => {
-  try {
-    const queryInput = req.body;
-    // do your role authentication here,
-    // use query.from to know the table being accessed
-    const result = await qb.executeJsonQuery(queryInput);
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+```bash
+# Generate + apply migration (uses local dev.db)
+bun src/cli.ts migrate dev --name add_age_column
+
+# Apply pending migrations to production DB (reads env vars)
+bun src/cli.ts migrate deploy
+
+# Rollback last migration
+bun src/cli.ts migrate reset
+
+# Check status
+bun src/cli.ts migrate status
+
+# Push schema directly, no migration file
+bun src/cli.ts db push
+```
+
+Connection is resolved from environment variables:
+
+| Env vars | Target |
+|----------|--------|
+| `TURSO_URL` + `TURSO_AUTH_TOKEN` | Turso |
+| `CFAccountId` + `D1databaseId` + `CFauthorizationToken` | D1 |
+| `DB_FILE` | Local file path |
+| _(none)_ | `./main.db` |
+
+`migrate dev` always targets `./bruv/dev.db` for local iteration.
+
+Migration files use `-- --> up` / `-- --> down` markers and run inside transactions:
+
+```sql
+-- --> up
+CREATE TABLE IF NOT EXISTS users (
+    id text PRIMARY KEY NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    name TEXT
+);
+
+-- --> down
+DROP TABLE users;
+```
+
+## JSON query interface
+
+For exposing queries over HTTP without writing per-route SQL:
+
+```ts
+const result = await db.executeJsonQuery({
+  from: "users",
+  action: "get",
+  where: [{ condition: "age > ?", params: [18] }],
+  orderBy: { column: "name", direction: "ASC" },
+  limit: 10,
 });
 ```
 
-## 🔄 Migrations
+Actions: `get`, `getOne`, `insert`, `update`, `delete`, `count`.
 
-Migrations are automatically generated when schema changes are detected:
+## Security
 
-```sql
--- Generated in ./Bruv-migrations/timestamp_add_user_role.sql:
--- Up
-ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';
+The query builder rejects dangerous input at the condition level:
 
--- Down
-ALTER TABLE users DROP COLUMN role;
-```
+- Parameterized queries only — no string interpolation
+- Blocked patterns: `; DROP`, `UNION`, `DELETE`, `INSERT`, `UPDATE`, `ALTER`, `EXEC`
+- Whitelisted operators: `=`, `>`, `<`, `>=`, `<=`, `LIKE`, `IN`, `BETWEEN`, `IS NULL`, `IS NOT NULL`
+- Max 100 params per query, max 1000 chars per string param
 
-### Setting up your schema
+`raw()` bypasses all validation — use it for migrations and admin queries only.
 
-This if your DB is new and your are not using any orm, just call toString
-and query your db with the queryBuilder.raw() method.
-
-Note: raw is not secured, it can be used to apply migrations too.
-be careful what you do with queryBuilder.raw().
-
-```ts
-console.log(user.toString());
-const raw = await qb.raw(user.toString());
-console.log({ raw });
-```
-
-## 🛡️ Security Features
-
-The query builder implements several security measures to prevent SQL injection and malicious queries:
-
-- Parameter validation (max 100 params)
-- SQL injection prevention
-- Query timeout limits
-- Rate limiting
-- String length validation
-- Dangerous pattern detection
-- Allowed parameter types: string, number, boolean, null
-
-#### Condition Validation
-
-- Whitelisted operators: `=, >, <, >=, <=, LIKE, IN, BETWEEN, IS NULL, IS NOT NULL`
-- Blocked dangerous patterns: `; DROP, DELETE, UPDATE, INSERT, ALTER, EXEC, UNION`
-- Parameterized queries enforced
-
-### Security Examples
+### Examples
 
 ```typescript
 // ✅ Safe queries
@@ -401,43 +215,13 @@ db.where("col = (SELECT ...)"); // Complex subqueries blocked
 db.where("name = ?", "a".repeat(1001)); // String too long
 ```
 
-## 🎮 Features
+## Contributing
 
-**Cloudflare D1**
+1. Fork
+2. Branch (`git checkout -b feature/your thing`)
+3. Commit
+4. PR
 
-- D1 API integration
+## License
 
-**Turso**
-
-- HTTP API support
-
-**📊 Performance**
-
-- Prepared statements
-- Connection pooling
-- Built-in Query caching
-
-**🚔 Security**
-
-- Block dangerous patterns
-- Block Complex subqueries
-- Block very long string parameters
-
-**🤝 Contributing**
-
-1. Fork the repository
-2. Create feature branch (git checkout -b feature/amazing)
-3. Commit changes (git commit -am 'Add amazing feature')
-4. Push branch (git push origin feature/amazing)
-5. Open a Pull Request
-
-## 📝 License
-
-[MIT License](https://choosealicense.com/licenses/mit/) - see LICENSE file
-
-### 🆘 Support
-
-Contributions are always welcome! creates issues and pull requests.
-Documentation
-GitHub Issues
-Discord Community
+MIT

@@ -1,10 +1,11 @@
 blogpost.md
-dist
-Bruv-migrations
+dist 
 tests.ts
 Database.db
 .env
-node_modules
+node_modules 
+Database.sqlite
+sample.sqlite
 TODO.md
-Database.sqlite 
-Bruv-migrations
+bruv
+dev.db

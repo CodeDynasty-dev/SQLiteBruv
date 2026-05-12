@@ -1,79 +1,126 @@
-import { Schema, SqliteBruv } from "./src/index.ts";
-// Example usage:
+import { SqliteBruv } from "./src/index.ts";
 
-export const user = new Schema<{
-  name: string;
-  username: string;
-  location: string;
-  age: number;
-  createdAt: Date;
-}>({
-  name: "users",
-  columns: {
-    name: { type: "TEXT", required: true },
-    username: { type: "TEXT", required: true, unique: true },
-    age: { type: "INTEGER", required: true },
-    location: {
-      type: "TEXT",
-      required: true,
-      default() {
-        return "earth";
-      },
-    },
-    createdAt: {
-      type: "DATETIME",
-      default() {
-        return "CURRENT_TIMESTAMP";
-      },
-    },
-  },
-});
-export const works = new Schema<{
-  name: string;
-  user: string;
-  createdAt: Date;
-  rating: number;
-}>({
-  name: "works",
-  columns: {
-    name: {
-      // unique: true,
-      type: "TEXT",
-      required: true,
-    },
-    user: {
-      type: "TEXT",
-      required: true,
-      target: "users",
-    },
-    rating: {
-      type: "INTEGER",
-      default() {
-        return "1";
-      },
-      check: ["1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5"],
-    },
-    createdAt: {
-      type: "DATETIME",
-      default() {
-        return "CURRENT_TIMESTAMP";
-      },
-    },
-  },
-});
-
+// Schema is auto-loaded from ./bruv/schema.prisma
 export const db = new SqliteBruv({
-  schema: [user, works],
-  // QueryMode: true,
-  TursoConfig: {
-    url: process.env.TURSO_URL!,
-    authToken: process.env.TURSO_AUTH_TOKEN!,
-  },
-  // D1Config: {
-  //   accountId: process.env.CFAccountId!,
-  //   databaseId: process.env.D1databaseId!,
-  //   apiKey: process.env.CFauthorizationToken!,
-  // },
-  // localFile: "sample.sqlite",
+  localFile: "sample.sqlite",
   logging: true,
 });
+ 
+
+// Insert
+await db
+  .from("users")
+  .insert({ name: "John Doe", email: "john@example.com" })
+  .then((changes) => {
+    console.log({ changes });
+  });
+
+// Update
+await db
+  .from("users")
+  .where("id = ?", 1)
+  .update({ name: "Jane Doe" })
+  .then((changes) => {
+    console.log({ changes });
+  });
+
+// Search
+await db
+  .from("users")
+  .where("id = ?", 1)
+  .andWhere("name LIKE ?", `%oh%`)
+  .get()
+  .then((changes) => {
+    console.log({ changes });
+  });
+
+// Delete
+await db
+  .from("users")
+  .where("id = ?", 1)
+  .delete()
+  .then((changes) => {
+    console.log({ changes });
+  });
+
+// Get all users
+db
+  .from("users")
+  .get()
+  .then((changes) => {
+    console.log({ changes });
+  });
+
+// Get one user
+await db
+  .from("users")
+  .where("id = ?", 1)
+  .getOne()
+  .then((changes) => {
+    console.log({ changes });
+  });
+
+// Select specific columns
+await db
+  .from("users")
+  .select("id", "name")
+  .get()
+  .then((changes) => {
+    console.log({ changes });
+  });
+
+// Where conditions
+await db
+  .from("users")
+  .where("age > ?", 18)
+  .get()
+  .then((changes) => {
+    console.log({ changes });
+  });
+
+// AndWhere conditions
+await db
+  .from("users")
+  .where("age > ?", 18)
+  .andWhere("country = ?", "USA")
+  .get()
+  .then((changes) => {
+    console.log({ changes });
+  });
+
+// OrWhere conditions
+await db
+  .from("users")
+  .where("age > ?", 18)
+  .orWhere("country = ?", "Canada")
+  .get()
+  .then((changes) => {
+    console.log({ changes });
+  });
+
+// Limit and Offset
+await db
+  .from("users")
+  .limit(10)
+  .offset(5)
+  .get()
+  .then((changes) => {
+    console.log({ changes });
+  });
+
+// OrderBy
+await db
+  .from("users")
+  .orderBy("name", "ASC")
+  .get()
+  .then((changes) => {
+    console.log({ changes });
+  });
+
+await db
+  .from("users")
+  .orderBy("name", "ASC")
+  .get()
+  .then((changes) => {
+    console.log({ changes });
+  });
