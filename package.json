@@ -6,7 +6,11 @@
   "type": "module",
   "files": [
     "dist/index.d.ts",
-    "dist/index.js"
+    "dist/index.js",
+    "dist/cli.d.ts",
+    "dist/cli.js",
+    "dist/parser.d.ts",
+    "dist/parser.js"
   ],
   "bin": {
     "bruv-cli": "dist/cli.js"
