@@ -13,7 +13,7 @@
     "dist/parser.js"
   ],
   "bin": {
-    "bruv-cli": "dist/cli.js"
+    "sqlitebruv": "dist/cli.js"
   },
   "scripts": {
     "compile": " rm -rf dist && tsc"
