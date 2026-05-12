@@ -6,7 +6,12 @@ A small, zero-dependency SQLite query builder for Bun with Prisma-style migratio
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![npm](https://img.shields.io/npm/dm/sqlitebruv.svg)](https://www.npmjs.com/package/sqlitebruv)
 
-<img src="https://github.com/FridayCandour/SQLiteBruv/blob/main/icon.png?raw=true" width="200" />
+<img src="https://github.com/FridayCandour/SQLiteBruv/blob/main/icon.png?raw=true" width="160" />
+
+
+Most Effective Query Builder and migration manager SQLite supporting D1/Turso and Bun's by default.
+
+v2 now a full sqlite only orm, enjoy and support & contribute!
 
 ## Install
 
