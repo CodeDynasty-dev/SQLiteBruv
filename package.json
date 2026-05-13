@@ -15,6 +15,9 @@
   "scripts": {
     "compile": " rm -rf dist && tsc"
   },
+    "bin": {
+      "bruv-cli": "dist/cli.js"
+    },
   "keywords": [
     "SQL",
     "SQLite",
