@@ -12,9 +12,6 @@
     "dist/parser.d.ts",
     "dist/parser.js"
   ],
-  "bin": {
-    "sqlitebruv": "dist/cli.js"
-  },
   "scripts": {
     "compile": " rm -rf dist && tsc"
   },
@@ -31,5 +28,10 @@
   "devDependencies": {
     "@types/bun": "^1.1.14",
     "@types/node": "^22.10.2"
-  }
+  },
+  "engines": {
+    "node": ">=14.0.0",
+    "bun": ">=0.1.0"
+  },
+  "private": false
 }
