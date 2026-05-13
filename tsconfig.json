@@ -16,6 +16,7 @@
     "noPropertyAccessFromIndexSignature": true,
     "stripInternal": true,
     "outDir": "./dist",
+    "rootDir": "./src",
     "skipDefaultLibCheck": true,
     "skipLibCheck": true
   },
