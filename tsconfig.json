@@ -7,6 +7,8 @@
     "moduleDetection": "force",
     "allowJs": true,
     "removeComments": true,
+
+    "types": ["node", "bun"],
     // Bundler mode
     "declaration": true,
     // Best practices
