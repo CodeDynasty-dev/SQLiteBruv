@@ -1,0 +1,30 @@
+name: Publish to npm
+
+on:
+  workflow_dispatch: # you click a button to publish
+
+permissions:
+  contents: read
+  id-token: write # required for provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build
+        run: npm run compile
+
+      - name: Publish
+        run: npm publish --provenance --access public
